@@ -1,0 +1,69 @@
+import requests
+from dash import Dash, dcc, html
+import plotly.express as px
+import pandas as pd
+from functools import reduce
+
+DATA_URL = "https://www.canada.ca/en/public-health/services/surveillance/respiratory-virus-detections-canada/2023-2024/week-2-ending-january-13-2024.html"
+
+html_tables = pd.read_html(
+    requests.get(DATA_URL, timeout=10).content, flavor="bs4", parse_dates=True
+)
+
+data = html_tables[4:]
+
+covid = data[0][["Week end", "ON Tests", "SARS-CoV-2%.3"]]
+flu = data[1][["Week end", "ON Tests", "ON A%", "ON B%"]]
+rsv = data[2][["Week end", "ON Tests", "RSV%.3"]]
+hpiv = data[3][["Week End", "ON Tests", "HPIV%.3"]]
+adv = data[4][["Week End", "ON Tests", "ADV%.3"]]
+hmpv = data[5][["Week End", "ON Tests", "HMPV%.3"]]
+evrv = data[6][["Week End", "ON Tests", "EV/RV%.3"]]
+hcov = data[7][["Week End", "ON Tests", "HCoV%.3"]]
+dataframes = [covid, flu, rsv, hpiv, adv, hmpv, evrv, hcov]
+
+for i in range(len(dataframes)):
+    dataframes[i] = dataframes[i].rename(columns=lambda x: x.rstrip(".3"))
+    dataframes[i] = dataframes[i].rename(
+        columns=lambda x: x.replace(
+            "ON Tests", dataframes[i].columns[2].rstrip("%") + " detected"
+        )
+    )
+    if "Week End" in dataframes[i].columns:
+        dataframes[i] = dataframes[i].rename(columns={"Week End": "Week end"})
+    if "ON A detected" in dataframes[i].columns:
+        dataframes[i] = dataframes[i].rename(columns={"ON A detected": "Flu detected"})
+
+merged = reduce(
+    lambda left, right: pd.merge(left, right, on="Week end"),
+    dataframes,
+)
+
+long = pd.melt(merged, id_vars=["Week end"], value_vars=merged.columns[1:])
+col1 = long.loc[long["variable"].str.endswith("%")]
+col1.loc[:, "variable"] = col1["variable"].str.rstrip("%")
+col1.columns = ["Week end", "Virus", "% positive"]
+col2 = long.loc[long["variable"].str.endswith("detected")]
+col2.loc[:, "variable"] = col2["variable"].str.rstrip(" detected")
+col2.columns = ["Week end", "Virus", "Cases detected"]
+df = pd.merge(col1, col2, on=["Week end", "Virus"], how="outer")
+total_flu = df.loc[df["Virus"] == "Flu", "Cases detected"].values
+percent_A = df.loc[df["Virus"] == "ON A", "% positive"].values
+percent_B = df.loc[df["Virus"] == "ON B", "% positive"].values
+A_cases = (total_flu * percent_A / (percent_A + percent_B)).round(0)
+B_cases = (total_flu * percent_B / (percent_A + percent_B)).round(0)
+df.loc[df["Virus"] == "ON A", "Cases detected"] = A_cases
+df.loc[df["Virus"] == "ON B", "Cases detected"] = B_cases
+df["Virus"] = (
+    df["Virus"].str.replace("ON A", "Influenza A").replace("ON B", "Influenza B")
+)
+df = df.dropna()
+
+fig = px.area(df, x="Week end", y="% positive", color="Virus")
+fig.update_layout(xaxis_title="", yaxis_title="% positive (per week)")
+
+app = Dash()
+app.layout = html.Div([dcc.Graph(figure=fig)])
+
+if __name__ == "__main__":
+    app.run_server(debug=True, host="0.0.0.0", port=9000)
