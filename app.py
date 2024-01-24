@@ -109,5 +109,7 @@ Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({ur
     ]
 )
 
-if __name__ == "__main__":
-    app.run_server(debug=True, host="0.0.0.0", port=9000)
+server = app.server
+
+# if __name__ == "__main__":
+#     app.run_server(debug=True, host="0.0.0.0", port=9000)
