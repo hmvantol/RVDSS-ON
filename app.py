@@ -1,5 +1,6 @@
 import requests
 from dash import Dash, dcc, html
+import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -93,7 +94,10 @@ fig.update_layout(
     xaxis_title="", yaxis_title="% positive (per week)", template="plotly_white"
 )
 
-app = Dash()
+app = Dash(
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
+)
 app.layout = html.Div(
     [
         dcc.Markdown(
