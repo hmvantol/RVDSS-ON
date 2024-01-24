@@ -2,9 +2,20 @@ import requests
 from dash import Dash, dcc, html
 import plotly.express as px
 import pandas as pd
+from bs4 import BeautifulSoup
 from functools import reduce
 
-DATA_URL = "https://www.canada.ca/en/public-health/services/surveillance/respiratory-virus-detections-canada/2023-2024/week-2-ending-january-13-2024.html"
+
+URL = "https://www.canada.ca/en/public-health/services/surveillance/respiratory-virus-detections-canada.html"
+
+r = requests.get(URL)
+soup = BeautifulSoup(r.content, "html5lib")
+
+res = soup.find(
+    "span",
+    attrs={"class": "badge"},
+)
+DATA_URL = "https://www.canada.ca" + res.find_previous("a").get("href")
 
 html_tables = pd.read_html(
     requests.get(DATA_URL, timeout=10).content, flavor="bs4", parse_dates=True
@@ -54,8 +65,19 @@ A_cases = (total_flu * percent_A / (percent_A + percent_B)).round(0)
 B_cases = (total_flu * percent_B / (percent_A + percent_B)).round(0)
 df.loc[df["Virus"] == "ON A", "Cases detected"] = A_cases
 df.loc[df["Virus"] == "ON B", "Cases detected"] = B_cases
-df["Virus"] = (
-    df["Virus"].str.replace("ON A", "Influenza A").replace("ON B", "Influenza B")
+df["Virus"].replace(
+    {
+        "ADV": "Adenovirus (ADV)",
+        "EV/RV": "Enterovirus/Rhinovirus (EV/RV)",
+        "HCoV": "Human Coronavirus (HCoV)",
+        "HMPV": "Human Metapneumovirus (HMPV)",
+        "HPIV": "Human Parainfluenza Virus (HPIV)",
+        "RSV": "Respiratory Syncytial Virus (RSV)",
+        "SARS-CoV-2": "Severe acute respiratory syndrome coronavirus 2 (SARS-CoV-2)",
+        "ON A": "Influenza A",
+        "ON B": "Influenza B",
+    },
+    inplace=True,
 )
 df = df.dropna()
 
@@ -63,7 +85,20 @@ fig = px.area(df, x="Week end", y="% positive", color="Virus")
 fig.update_layout(xaxis_title="", yaxis_title="% positive (per week)")
 
 app = Dash()
-app.layout = html.Div([dcc.Graph(figure=fig)])
+app.layout = html.Div(
+    [
+        dcc.Markdown(
+            """
+# Weekly Ontario Respiratory Virus Report
+
+Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({url})) of the Public Health Agency of Canada (PHAC).
+""".format(
+                url=URL
+            )
+        ),
+        dcc.Graph(figure=fig),
+    ]
+)
 
 if __name__ == "__main__":
     app.run_server(debug=True, host="0.0.0.0", port=9000)
