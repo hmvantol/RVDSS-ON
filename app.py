@@ -81,8 +81,17 @@ df["Virus"].replace(
 )
 df = df.dropna()
 
-fig = px.area(df, x="Week end", y="% positive", color="Virus")
-fig.update_layout(xaxis_title="", yaxis_title="% positive (per week)")
+fig = px.area(
+    df,
+    x="Week end",
+    y="% positive",
+    color="Virus",
+    hover_data="Cases detected",
+    color_discrete_sequence=px.colors.qualitative.Alphabet,
+)
+fig.update_layout(
+    xaxis_title="", yaxis_title="% positive (per week)", template="plotly_white"
+)
 
 app = Dash()
 app.layout = html.Div(
