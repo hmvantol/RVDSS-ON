@@ -1,7 +1,9 @@
 import requests
-from dash import Dash, dcc, html
+from dash import Dash, dcc, html, Input, Output
+import dash_daq as daq
 import dash_bootstrap_components as dbc
 import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 from bs4 import BeautifulSoup
 from functools import reduce
@@ -66,7 +68,7 @@ A_cases = (total_flu * percent_A / (percent_A + percent_B)).round(0)
 B_cases = (total_flu * percent_B / (percent_A + percent_B)).round(0)
 df.loc[df["Virus"] == "ON A", "Cases detected"] = A_cases
 df.loc[df["Virus"] == "ON B", "Cases detected"] = B_cases
-df["Virus"].replace(
+df["Virus"] = df["Virus"].replace(
     {
         "ADV": "Adenovirus (ADV)",
         "EV/RV": "Enterovirus/Rhinovirus (EV/RV)",
@@ -77,22 +79,9 @@ df["Virus"].replace(
         "SARS-CoV-2": "Severe acute respiratory syndrome coronavirus 2 (SARS-CoV-2)",
         "ON A": "Influenza A",
         "ON B": "Influenza B",
-    },
-    inplace=True,
+    }
 )
 df = df.dropna()
-
-fig = px.area(
-    df,
-    x="Week end",
-    y="% positive",
-    color="Virus",
-    hover_data="Cases detected",
-    color_discrete_sequence=px.colors.qualitative.Alphabet,
-)
-fig.update_layout(
-    xaxis_title="", yaxis_title="% positive (per week)", template="plotly_white"
-)
 
 app = Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP],
@@ -109,11 +98,78 @@ Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({ur
                 url=URL
             )
         ),
-        dcc.Graph(figure=fig),
+        html.Div(
+            [
+                html.Div(
+                    "stack", style={"textAlign": "right", "display": "inline-block"}
+                ),
+                daq.BooleanSwitch(id="switch-unstack", on=False),
+                html.Div(
+                    "unstack", style={"textAlign": "left", "display": "inline-block"}
+                ),
+            ],
+            style={"display": "flex", "justify-content": "center"},
+        ),
+        dcc.Graph(id="switch-result", style={"width": "80vw", "height": "110vh"}),
     ]
 )
 
+
+@app.callback(
+    Output("switch-result", "figure"),
+    Input("switch-unstack", "on"),
+)
+def update_output(on):
+    if on:
+        fig = px.line(
+            df,
+            x="Week end",
+            y="% positive",
+            color="Virus",
+            hover_data="Cases detected",
+            color_discrete_sequence=px.colors.qualitative.Alphabet,
+            facet_row="Virus",
+        )
+        fig.update_layout(template="plotly_white")
+        fig.for_each_yaxis(lambda y: y.update(title="", matches=None))
+        fig.for_each_annotation(
+            lambda a: a.update(
+                text=a.text.split("=")[1],
+                textangle=0,
+                xanchor="right",
+                xref="paper",
+                yanchor="top",
+            )
+        )
+        fig.add_annotation(
+            showarrow=False,
+            xanchor="center",
+            xref="paper",
+            x=-0.075,
+            yanchor="middle",
+            yref="paper",
+            y=0.5,
+            textangle=270,
+            text="% positive (per week)",
+        )
+    else:
+        fig = px.area(
+            df,
+            x="Week end",
+            y="% positive",
+            color="Virus",
+            hover_data="Cases detected",
+            color_discrete_sequence=px.colors.qualitative.Alphabet,
+            facet_row=None,
+        )
+        fig.update_layout(
+            yaxis_title="% positive (per week)",
+            template="plotly_white",
+        )
+    return fig
+
+
 server = app.server
 
-# if __name__ == "__main__":
-#     app.run_server(debug=True, host="0.0.0.0", port=9000)
+if __name__ == "__main__":
+    app.run_server(debug=True, host="0.0.0.0", port=9000)
