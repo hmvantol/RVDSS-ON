@@ -138,7 +138,8 @@ def update_output(on):
                 textangle=0,
                 xanchor="right",
                 xref="paper",
-                yanchor="top",
+                yanchor="bottom",
+                yref="paper",
             )
         )
         fig.add_annotation(
