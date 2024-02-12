@@ -7,7 +7,8 @@ import plotly.graph_objects as go
 import pandas as pd
 from bs4 import BeautifulSoup
 from functools import reduce
-
+import itertools
+from collections import OrderedDict
 
 URL = "https://www.canada.ca/en/public-health/services/surveillance/respiratory-virus-detections-canada.html"
 
@@ -26,62 +27,112 @@ html_tables = pd.read_html(
 
 data = html_tables[4:]
 
-covid = data[0][["Week end", "ON Tests", "SARS-CoV-2%.3"]]
-flu = data[1][["Week end", "ON Tests", "ON A%", "ON B%"]]
-rsv = data[2][["Week end", "ON Tests", "RSV%.3"]]
-hpiv = data[3][["Week End", "ON Tests", "HPIV%.3"]]
-adv = data[4][["Week End", "ON Tests", "ADV%.3"]]
-hmpv = data[5][["Week End", "ON Tests", "HMPV%.3"]]
-evrv = data[6][["Week End", "ON Tests", "EV/RV%.3"]]
-hcov = data[7][["Week End", "ON Tests", "HCoV%.3"]]
-dataframes = [covid, flu, rsv, hpiv, adv, hmpv, evrv, hcov]
+region_menu = OrderedDict(
+    [
+        ("Can", "All Canada"),
+        ("Atl", "Atlantic"),
+        ("QC", "Quebec"),
+        ("ON", "Ontario"),
+        ("Pr", "Prairies"),
+        ("BC", "British Columbia"),
+        ("Terr", "Territories"),
+    ]
+)
 
-for i in range(len(dataframes)):
-    dataframes[i] = dataframes[i].rename(columns=lambda x: x.rstrip(".3"))
-    dataframes[i] = dataframes[i].rename(
-        columns=lambda x: x.replace(
-            "ON Tests", dataframes[i].columns[2].rstrip("%") + " detected"
+virus_dict = OrderedDict(
+    [
+        ("SARS-CoV-2", "Severe acute respiratory syndrome coronavirus 2 (SARS-CoV-2)"),
+        ("A", "Influenza A"),
+        ("B", "Influenza B"),
+        ("RSV", "Respiratory Syncytial Virus (RSV)"),
+        ("HPIV", "Human Parainfluenza Virus (HPIV)"),
+        ("ADV", "Adenovirus (ADV)"),
+        ("HMPV", "Human Metapneumovirus (HMPV)"),
+        ("EV/RV", "Enterovirus/Rhinovirus (EV/RV)"),
+        ("HCoV", "Human Coronavirus (HCoV)"),
+    ]
+)
+
+percent_positive = []
+cases_detected = []
+for i in range(len(data)):
+    data[i] = data[i].rename(columns={"Week End": "Week end"})
+    percent_positive.append(data[i].loc[:, data[i].columns.str.contains("%")])
+    cases_detected.append(data[i].loc[:, data[i].columns.str.contains("Tests")])
+
+for i in range(len(percent_positive)):
+    if i == 1:
+        double_menu = list(
+            itertools.chain.from_iterable(
+                itertools.repeat(x, 2) for x in region_menu.keys()
+            )
         )
+        AB_menu = ["A", "B"] * len(region_menu.keys())
+        percent_positive[i].columns = [
+            x + " " + y for x, y in zip(double_menu, AB_menu)
+        ]
+    elif i in [0, 2]:
+        percent_positive[i].columns = [
+            x + " " + percent_positive[i].columns[0].split(".")[0].rstrip("%")
+            for x in region_menu.keys()
+        ]
+    else:
+        percent_positive[i].columns = [
+            x + " " + percent_positive[i].columns[0].split(".")[0].rstrip("%")
+            for x in list(region_menu.keys())[:-1]
+        ]
+    percent_positive[i] = pd.concat(
+        [data[i].loc[:, "Week end"], percent_positive[i]], axis=1
     )
-    if "Week End" in dataframes[i].columns:
-        dataframes[i] = dataframes[i].rename(columns={"Week End": "Week end"})
-    if "ON A detected" in dataframes[i].columns:
-        dataframes[i] = dataframes[i].rename(columns={"ON A detected": "Flu detected"})
 
-merged = reduce(
+for i in range(len(cases_detected)):
+    cases_detected[i].columns = (
+        cases_detected[i].columns.str.rstrip("Tests")
+        + [x for x in virus_dict.keys() if x != "B"][i]
+    )
+    cases_detected[i] = pd.concat(
+        [data[i].loc[:, "Week end"], cases_detected[i]], axis=1
+    )
+
+cases_detected.append(cases_detected[1].copy())
+cases_detected[-1].columns = cases_detected[-1].columns.str.replace("A", "B")
+cases_detected[-1].columns = cases_detected[-1].columns.str.replace("Btl", "Atl")
+merged1 = reduce(
     lambda left, right: pd.merge(left, right, on="Week end"),
-    dataframes,
+    percent_positive,
+)
+merged2 = reduce(
+    lambda left, right: pd.merge(left, right, on="Week end"),
+    cases_detected,
 )
 
-long = pd.melt(merged, id_vars=["Week end"], value_vars=merged.columns[1:])
-col1 = long.loc[long["variable"].str.endswith("%")]
-col1.loc[:, "variable"] = col1["variable"].str.rstrip("%")
-col1.columns = ["Week end", "Virus", "% positive"]
-col2 = long.loc[long["variable"].str.endswith("detected")]
-col2.loc[:, "variable"] = col2["variable"].str.rstrip(" detected")
-col2.columns = ["Week end", "Virus", "Cases detected"]
-df = pd.merge(col1, col2, on=["Week end", "Virus"], how="outer")
-total_flu = df.loc[df["Virus"] == "Flu", "Cases detected"].values
-percent_A = df.loc[df["Virus"] == "ON A", "% positive"].values
-percent_B = df.loc[df["Virus"] == "ON B", "% positive"].values
-A_cases = (total_flu * percent_A / (percent_A + percent_B)).round(0)
-B_cases = (total_flu * percent_B / (percent_A + percent_B)).round(0)
-df.loc[df["Virus"] == "ON A", "Cases detected"] = A_cases
-df.loc[df["Virus"] == "ON B", "Cases detected"] = B_cases
-df["Virus"] = df["Virus"].replace(
-    {
-        "ADV": "Adenovirus (ADV)",
-        "EV/RV": "Enterovirus/Rhinovirus (EV/RV)",
-        "HCoV": "Human Coronavirus (HCoV)",
-        "HMPV": "Human Metapneumovirus (HMPV)",
-        "HPIV": "Human Parainfluenza Virus (HPIV)",
-        "RSV": "Respiratory Syncytial Virus (RSV)",
-        "SARS-CoV-2": "Severe acute respiratory syndrome coronavirus 2 (SARS-CoV-2)",
-        "ON A": "Influenza A",
-        "ON B": "Influenza B",
-    }
+long1 = pd.melt(
+    merged1,
+    id_vars=["Week end"],
+    var_name="variable",
+    value_name="% positive",
 )
-df = df.dropna()
+col_split = long1.variable.str.split(" ", expand=True)
+long1["Region"] = col_split[0]
+long1["Virus"] = col_split[1]
+
+long2 = pd.melt(
+    merged2,
+    id_vars=["Week end"],
+    var_name="variable",
+    value_name="Cases detected",
+)
+col_split = long2.variable.str.split(" ", expand=True)
+long2["Region"] = col_split[0]
+long2["Virus"] = col_split[1]
+
+long1.drop(columns=["variable"], inplace=True)
+long2.drop(columns=["variable"], inplace=True)
+df = pd.merge(long1, long2, on=["Week end", "Region", "Virus"], how="outer")
+df["Virus"] = df["Virus"].replace(virus_dict)
+
+# Sort data by week end, then region, then virus
+df = df.sort_values(by=["Week end", "Region", "Virus"])
 
 app = Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP],
@@ -91,7 +142,7 @@ app.layout = html.Div(
     [
         dcc.Markdown(
             """
-# Weekly Ontario Respiratory Virus Report
+# Weekly Respiratory Virus Report
 
 Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({url})) of the Public Health Agency of Canada (PHAC).
 """.format(
@@ -100,6 +151,13 @@ Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({ur
         ),
         html.Div(
             [
+                dcc.Dropdown(
+                    id="dropdown",
+                    options=list(region_menu.values()),
+                    value="All Canada",
+                    style={"display": "inline-block", "width": "25vw"},
+                ),
+                html.Div(" ", style={"display": "inline-block", "width": "5vw"}),
                 html.Div(
                     "stack", style={"textAlign": "right", "display": "inline-block"}
                 ),
@@ -108,7 +166,7 @@ Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({ur
                     "unstack", style={"textAlign": "left", "display": "inline-block"}
                 ),
             ],
-            style={"display": "flex", "justify-content": "center"},
+            style={"display": "flex", "justify-content": "left"},
         ),
         dcc.Graph(id="switch-result", style={"width": "80vw", "height": "110vh"}),
     ]
@@ -118,11 +176,15 @@ Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({ur
 @app.callback(
     Output("switch-result", "figure"),
     Input("switch-unstack", "on"),
+    Input("dropdown", "value"),
 )
-def update_output(on):
+def update_chart(on, region):
+    new_region_dict = {v: k for k, v in region_menu.items()}
+    new_region_dict[None] = "Can"
+    mask = df["Region"] == new_region_dict[region]
     if on:
         fig = px.line(
-            df,
+            df[mask],
             x="Week end",
             y="% positive",
             color="Virus",
@@ -155,7 +217,7 @@ def update_output(on):
         )
     else:
         fig = px.area(
-            df,
+            df[mask],
             x="Week end",
             y="% positive",
             color="Virus",
