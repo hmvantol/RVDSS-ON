@@ -138,38 +138,41 @@ app = Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP],
     meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
 )
-app.layout = html.Div(
-    [
-        dcc.Markdown(
-            """
+app.layout = dbc.Container(
+    html.Div(
+        [
+            dcc.Markdown(
+                """
 # Weekly Respiratory Virus Report
 
 Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({url})) of the Public Health Agency of Canada (PHAC).
 """.format(
-                url=URL
-            )
-        ),
-        html.Div(
-            [
-                dcc.Dropdown(
-                    id="dropdown",
-                    options=list(region_menu.values()),
-                    value="All Canada",
-                    style={"display": "inline-block", "width": "25vw"},
-                ),
-                html.Div(" ", style={"display": "inline-block", "width": "5vw"}),
-                html.Div(
-                    "stack", style={"textAlign": "right", "display": "inline-block"}
-                ),
-                daq.BooleanSwitch(id="switch-unstack", on=False),
-                html.Div(
-                    "unstack", style={"textAlign": "left", "display": "inline-block"}
-                ),
-            ],
-            style={"display": "flex", "justify-content": "left"},
-        ),
-        dcc.Graph(id="switch-result", style={"width": "80vw", "height": "110vh"}),
-    ]
+                    url=URL
+                )
+            ),
+            html.Div(
+                [
+                    dcc.Dropdown(
+                        id="dropdown",
+                        options=list(region_menu.values()),
+                        value="All Canada",
+                        style={"display": "inline-block", "width": "25vw"},
+                    ),
+                    html.Div(" ", style={"display": "inline-block", "width": "5vw"}),
+                    html.Div(
+                        "stack", style={"textAlign": "right", "display": "inline-block"}
+                    ),
+                    daq.BooleanSwitch(id="switch-unstack", on=False),
+                    html.Div(
+                        "unstack",
+                        style={"textAlign": "left", "display": "inline-block"},
+                    ),
+                ],
+                style={"display": "flex", "justify-content": "left"},
+            ),
+            dcc.Graph(id="switch-result", style={"width": "80vw", "height": "110vh"}),
+        ]
+    )
 )
 
 
