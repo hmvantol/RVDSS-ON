@@ -172,8 +172,7 @@ Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({ur
             ),
             dcc.Graph(id="switch-result", style={"width": "80vw", "height": "110vh"}),
         ]
-    ),
-    fluid=True,
+    )
 )
 
 
@@ -198,7 +197,6 @@ def update_chart(on, region):
         )
         fig.update_layout(template="plotly_white")
         fig.for_each_yaxis(lambda y: y.update(title="", matches=None))
-        fig.update_traces(fill="tozeroy")
         fig.for_each_annotation(
             lambda a: a.update(
                 text=a.text.split("=")[1],
