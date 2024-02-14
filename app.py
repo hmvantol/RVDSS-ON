@@ -131,49 +131,59 @@ long2.drop(columns=["variable"], inplace=True)
 df = pd.merge(long1, long2, on=["Week end", "Region", "Virus"], how="outer")
 df["Virus"] = df["Virus"].replace(virus_dict)
 
-# Sort data by week end, then region, then virus
 df = df.sort_values(by=["Week end", "Region", "Virus"])
 
 app = Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP],
     meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
 )
+
+app.title = "Weekly Respiratory Virus Report"
 app.layout = dbc.Container(
-    html.Div(
-        [
-            dcc.Markdown(
-                """
+    [
+        dbc.Row(
+            dbc.Col(
+                dcc.Markdown(
+                    """
 # Weekly Respiratory Virus Report
 
 Data comes from the Respiratory Virus Detection Surveillance System ([RVDSS]({url})) of the Public Health Agency of Canada (PHAC).
 """.format(
-                    url=URL
-                )
-            ),
-            html.Div(
-                [
+                        url=URL
+                    )
+                ),
+            )
+        ),
+        dbc.Row(
+            [
+                dbc.Col(
                     dcc.Dropdown(
                         id="dropdown",
                         options=list(region_menu.values()),
                         value="All Canada",
-                        style={"display": "inline-block", "width": "25vw"},
-                    ),
-                    html.Div(" ", style={"display": "inline-block", "width": "5vw"}),
+                        style={"width": "25vw"},
+                    )
+                ),
+                dbc.Col(
                     html.Div(
-                        "stack", style={"textAlign": "right", "display": "inline-block"}
-                    ),
-                    daq.BooleanSwitch(id="switch-unstack", on=False),
-                    html.Div(
-                        "unstack",
-                        style={"textAlign": "left", "display": "inline-block"},
-                    ),
-                ],
-                style={"display": "flex", "justify-content": "left"},
-            ),
-            dcc.Graph(id="switch-result", style={"width": "80vw", "height": "110vh"}),
-        ]
-    ),
-    fluid=True,
+                        [
+                            html.Div(
+                                "stack",
+                                style={"textAlign": "right", "display": "inline-block"},
+                            ),
+                            daq.BooleanSwitch(id="switch-unstack", on=False),
+                            html.Div(
+                                "unstack",
+                                style={"textAlign": "left", "display": "inline-block"},
+                            ),
+                        ],
+                        style={"display": "flex", "justify-content": "left"},
+                    )
+                ),
+            ]
+        ),
+        dbc.Row(dbc.Col(dcc.Graph(id="switch-result", style={"width": "75vw"}))),
+    ]
 )
 
 
@@ -196,9 +206,7 @@ def update_chart(on, region):
             color_discrete_sequence=px.colors.qualitative.Alphabet,
             facet_row="Virus",
         )
-        fig.update_layout(template="plotly_white")
         fig.for_each_yaxis(lambda y: y.update(title="", matches=None))
-        fig.update_traces(fill="tozeroy")
         fig.for_each_annotation(
             lambda a: a.update(
                 text=a.text.split("=")[1],
@@ -220,6 +228,14 @@ def update_chart(on, region):
             textangle=270,
             text="% positive (per week)",
         )
+        fig.update_yaxes(automargin=True)
+        fig.update_layout(
+            minreducedwidth=300,
+            minreducedheight=350,
+            template="plotly_white",
+            showlegend=False,
+            margin=dict(l=20, r=20, t=20, b=20),
+        )
     else:
         fig = px.area(
             df[mask],
@@ -230,9 +246,22 @@ def update_chart(on, region):
             color_discrete_sequence=px.colors.qualitative.Alphabet,
             facet_row=None,
         )
+        fig.update_yaxes(automargin=True)
         fig.update_layout(
+            minreducedwidth=300,
+            minreducedheight=300,
             yaxis_title="% positive (per week)",
             template="plotly_white",
+            margin=dict(l=20, r=20, t=20, b=20),
+            legend=dict(
+                orientation="h",
+                xanchor="left",
+                yanchor="top",
+                x=0,
+                y=2,
+                bgcolor="rgba(0,0,0,0)",
+                title="",
+            ),
         )
     return fig
 
